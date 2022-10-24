@@ -24,8 +24,7 @@ namespace akcp {
 
 Server::Server(asio::io_context &io, const std::string &address, short port)
     : io_(io), socket_(io_, udp::endpoint(address::from_string(address), port)),
-      timer_(io), manager_(new ConnectionManager()) {
-}
+      timer_(io), manager_(new ConnectionManager()) {}
 
 Server::Server(asio::io_context &io, short port)
     : Server(io, "127.0.0.1", port) {}
@@ -53,11 +52,13 @@ void Server::do_recv() {
     }
     auto buf = std::make_unique<char[]>(BUFFER_SIZE);
     auto raw_buf = buf.get(); // evaluation order
+    auto remote_ep = std::make_unique<udp::endpoint>();
+    auto remote_ep_ptr = remote_ep.get();
 
     socket_.async_receive_from(
-        asio::buffer(raw_buf, BUFFER_SIZE), remote_ep_,
-        [this, buf = std::move(buf)](const std::error_code &ec,
-                                     size_t nread) mutable {
+        asio::buffer(raw_buf, BUFFER_SIZE), *remote_ep_ptr,
+        [this, buf = std::move(buf), remote_ep = std::move(remote_ep)](
+            const std::error_code &ec, size_t nread) mutable {
             if (ec) {
                 std::cout << ec.message() << std::endl;
             } else {
@@ -65,13 +66,14 @@ void Server::do_recv() {
                 if (nread > KCP_HEADER_SIZE) {
                     auto kcp = manager_->get(buf.get());
                     if (kcp == nullptr) {
-                        manager_->add(remote_ep_, buf.get(), this);
+                        manager_->add(*remote_ep, buf.get(), this);
                         fmt::print("new connection: {}:{}\n",
-                                   remote_ep_.address().to_string(),
-                                   remote_ep_.port());
+                                   remote_ep->address().to_string(),
+                                   remote_ep->port());
                     }
                     kcp = manager_->get(buf.get());
-                    kcp->set_remote_endpoint(remote_ep_);
+                    kcp->set_remote_endpoint(
+                        *remote_ep); // 每次收到消息重新绑定
                     kcp->recv(std::move(buf), nread);
                 }
             }

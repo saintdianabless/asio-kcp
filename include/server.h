@@ -29,7 +29,6 @@ class Server {
 
     asio::io_context &io_;
     udp::socket socket_;
-    udp::endpoint remote_ep_;
     asio::steady_timer timer_;
 
     bool stop_ = false;
